@@ -1,0 +1,94 @@
+{
+  "name": "@edwinfom/ai-guard",
+  "version": "0.1.0",
+  "description": "A security middleware for AI API responses — PII redaction, schema enforcement, prompt injection detection, and budget sentinel.",
+  "author": {
+    "name": "Edwin Fom",
+    "email": "edwinfom05@gmail.com"
+  },
+  "license": "MIT",
+  "keywords": [
+    "ai",
+    "llm",
+    "security",
+    "pii",
+    "schema",
+    "prompt-injection",
+    "openai",
+    "anthropic",
+    "gemini",
+    "guardrails",
+    "middleware",
+    "sanitization"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./pii": {
+      "types": "./dist/modules/pii/index.d.ts",
+      "import": "./dist/modules/pii/index.js",
+      "require": "./dist/modules/pii/index.cjs"
+    },
+    "./schema": {
+      "types": "./dist/modules/schema/index.d.ts",
+      "import": "./dist/modules/schema/index.js",
+      "require": "./dist/modules/schema/index.cjs"
+    },
+    "./injection": {
+      "types": "./dist/modules/injection/index.d.ts",
+      "import": "./dist/modules/injection/index.js",
+      "require": "./dist/modules/injection/index.cjs"
+    },
+    "./budget": {
+      "types": "./dist/modules/budget/index.d.ts",
+      "import": "./dist/modules/budget/index.js",
+      "require": "./dist/modules/budget/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "build:watch": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run build && npm run test"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0",
+    "zod": "^3.23.0"
+  },
+  "peerDependencies": {
+    "zod": ">=3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "zod": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Edwinfom00/ai-guard.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Edwinfom00/ai-guard/issues"
+  },
+  "homepage": "https://github.com/Edwinfom00/ai-guard#readme"
+}
