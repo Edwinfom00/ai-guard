@@ -208,13 +208,13 @@ const result = await guard.protect(callFn, 'My card is 4532015112830366');
 | `ipAddress` | `192.168.1.1` | Universal |
 | `iban` | `FR76 3000 6000 0112 3456 7890 189` | International |
 | `url` | `https://api.internal.com/secret?key=abc` | Universal |
-| `nir` ✨ | `1 85 02 75 115 423 57` | 🇫🇷 France |
-| `siret` ✨ | `732 829 320 00074` | 🇫🇷 France |
-| `siren` ✨ | `732 829 320` | 🇫🇷 France |
-| `passport` ✨ | `AB123456` | International |
-| `dateOfBirth` ✨ | `12/05/1990`, `1990-05-12` | Universal |
+| `nir`*** | `1 85 02 75 115 423 57` |France |
+| `siret`*** | `732 829 320 00074` |France |
+| `siren`*** | `732 829 320` |France |
+| `passport`*** | `AB123456` | International |
+| `dateOfBirth`*** | `12/05/1990`, `1990-05-12` | Universal |
 
-> ✨ = new in v2. Credit cards are validated via the **Luhn algorithm** — no false positives on random digit sequences.
+>*** = new in v2. Credit cards are validated via the **Luhn algorithm** — no false positives on random digit sequences.
 
 ---
 
@@ -252,7 +252,7 @@ try {
 
 ---
 
-## 4. Canary Tokens ✨ new in v2
+## 4. Canary Tokens*** new in v2
 
 Canary tokens are invisible markers injected into your prompt. If the LLM echoes the marker back in its response, it means the model revealed your system prompt — a sign of prompt injection or jailbreak.
 
@@ -278,7 +278,7 @@ console.log(result.meta.canaryLeaked); // false — system prompt was safe
 
 ---
 
-## 5. Content Policy ✨ new in v2
+## 5. Content Policy*** new in v2
 
 Detects harmful content in prompts and AI responses before it reaches your users.
 
@@ -319,7 +319,7 @@ console.log(result.meta.contentViolation); // true/false
 
 ---
 
-## 6. Hallucination Detection ✨ new in v2
+## 6. Hallucination Detection*** new in v2
 
 Verifies that key facts in the AI's response are actually present in your source documents. Essential for RAG (Retrieval-Augmented Generation) pipelines.
 
@@ -390,7 +390,7 @@ console.log(result.meta.budget);
 
 ---
 
-## 8. Rate Limiter ✨ new in v2
+## 8. Rate Limiter*** new in v2
 
 Prevents abuse by limiting requests and token usage per user (or globally).
 
@@ -429,7 +429,7 @@ limiter.reset();                     // clear all buckets (useful for tests)
 
 ---
 
-## 9. Audit Log ✨ new in v2
+## 9. Audit Log*** new in v2
 
 Every `protect()` call fires a structured audit entry. Use it for logging, compliance, and monitoring dashboards.
 
