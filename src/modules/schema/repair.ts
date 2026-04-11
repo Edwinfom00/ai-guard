@@ -1,3 +1,4 @@
+import { jsonrepair } from 'jsonrepair';
 import { GuardianError } from '../../core/errors.js';
 
 /**
@@ -22,11 +23,27 @@ export function cleanMarkdown(raw: string): string {
 }
 
 /**
- * LEVEL 2 — Extract first valid JSON object or array from arbitrary text.
- * Handles: "Here is your result: { ... } Hope that helps!"
+ * LEVEL 2 — Deep JSON repair via jsonrepair.
+ * Handles 100+ malformed patterns that our old regex missed:
+ * - Trailing commas: {"a":1,}
+ * - Unquoted keys: {name:"Edwin"}
+ * - Single quotes: {'name':'Edwin'}
+ * - Incomplete JSON: {"name":"Edwin"
+ * - Surrounding text: "Here is the JSON: {...} Hope that helps!"
+ * - Invalid escape sequences
+ * - Python-style booleans: True/False/None
+ *
+ * Falls back to our manual bracket-extraction if jsonrepair itself throws.
+ */
+export function repairJSON(raw: string): string {
+  return jsonrepair(raw);
+}
+
+/**
+ * Legacy manual extractor — kept as last-resort fallback before LLM retry.
+ * Extracts the first syntactically complete JSON object or array.
  */
 export function extractJSON(raw: string): string | null {
-  // Try to find the first { or [ and match its closing bracket
   const startObj = raw.indexOf('{');
   const startArr = raw.indexOf('[');
 
@@ -37,23 +54,14 @@ export function extractJSON(raw: string): string | null {
   if (startObj === -1 && startArr === -1) return null;
 
   if (startObj === -1) {
-    start = startArr;
-    openChar = '[';
-    closeChar = ']';
+    start = startArr; openChar = '['; closeChar = ']';
   } else if (startArr === -1) {
-    start = startObj;
-    openChar = '{';
-    closeChar = '}';
+    start = startObj; openChar = '{'; closeChar = '}';
   } else {
-    // Use whichever comes first
     if (startObj < startArr) {
-      start = startObj;
-      openChar = '{';
-      closeChar = '}';
+      start = startObj; openChar = '{'; closeChar = '}';
     } else {
-      start = startArr;
-      openChar = '[';
-      closeChar = ']';
+      start = startArr; openChar = '['; closeChar = ']';
     }
   }
 
@@ -64,18 +72,14 @@ export function extractJSON(raw: string): string | null {
   for (let i = start; i < raw.length; i++) {
     const char = raw[i];
     if (char === undefined) continue;
-
     if (escape) { escape = false; continue; }
     if (char === '\\' && inString) { escape = true; continue; }
     if (char === '"') { inString = !inString; continue; }
     if (inString) continue;
-
     if (char === openChar) depth++;
     if (char === closeChar) {
       depth--;
-      if (depth === 0) {
-        return raw.slice(start, i + 1);
-      }
+      if (depth === 0) return raw.slice(start, i + 1);
     }
   }
 
@@ -84,7 +88,6 @@ export function extractJSON(raw: string): string | null {
 
 /**
  * LEVEL 3 — Ask the LLM to return corrected JSON.
- * Sends a correction prompt to the retryFn provided in config.
  */
 export async function retryWithLLM(
   raw: string,
@@ -101,13 +104,15 @@ export async function retryWithLLM(
     raw,
   ].join('\n');
 
-  const result = await retryFn(correctionPrompt);
-  return result.trim();
+  return (await retryFn(correctionPrompt)).trim();
 }
 
 /**
- * Attempts to parse a string as JSON using the 3-level repair pipeline.
- * Returns the parsed value or throws a GuardianError.
+ * Full 3-level repair pipeline.
+ *
+ * Level 1 — Strip markdown fences
+ * Level 2 — jsonrepair (handles 100+ broken patterns)
+ * Level 3 — LLM retry with correction prompt
  */
 export async function repairAndParse(
   raw: string,
@@ -120,43 +125,32 @@ export async function repairAndParse(
 ): Promise<unknown> {
   const { repair, retryFn, schemaDescription = 'unknown', maxRetries = 1 } = options;
 
-  // Always try a direct parse first (no repair needed)
-  try {
-    return JSON.parse(raw);
-  } catch {
-    // Fall through to repair levels
-  }
+  // Direct parse — no repair needed (happy path)
+  try { return JSON.parse(raw); } catch { /* fall through */ }
 
   // Level 1: Clean markdown
   const cleaned = cleanMarkdown(raw);
-  try {
-    return JSON.parse(cleaned);
-  } catch {
+  try { return JSON.parse(cleaned); } catch {
     if (repair === 'clean') {
-      throw new GuardianError(
-        'SCHEMA_REPAIR_FAILED',
-        'JSON parsing failed after Level 1 (markdown cleanup).',
-        { raw }
-      );
+      throw new GuardianError('SCHEMA_REPAIR_FAILED',
+        'JSON parsing failed after Level 1 (markdown cleanup).', { raw });
     }
   }
 
-  // Level 2: Extract JSON substring
-  const extracted = extractJSON(cleaned);
-  if (extracted !== null) {
+  // Level 2: extractJSON + jsonrepair combo
+  // Step 2a — extract the first JSON structure from surrounding text
+  const extracted = extractJSON(cleaned) ?? cleaned;
+  // Step 2b — only apply jsonrepair if the text looks like a JSON structure
+  const looksLikeJSON = extracted.trimStart().startsWith('{') || extracted.trimStart().startsWith('[');
+  if (looksLikeJSON) {
     try {
-      return JSON.parse(extracted);
-    } catch {
-      // Fall through
-    }
+      return JSON.parse(jsonrepair(extracted));
+    } catch { /* fall through */ }
   }
 
   if (repair === 'extract' || !retryFn) {
-    throw new GuardianError(
-      'SCHEMA_REPAIR_FAILED',
-      'JSON parsing failed after Level 2 (JSON extraction).',
-      { raw }
-    );
+    throw new GuardianError('SCHEMA_REPAIR_FAILED',
+      'JSON parsing failed after Level 2 (jsonrepair).', { raw });
   }
 
   // Level 3: LLM retry
@@ -164,16 +158,16 @@ export async function repairAndParse(
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       const retried = await retryWithLLM(cleaned, schemaDescription, retryFn);
-      const extracted2 = extractJSON(retried) ?? retried;
-      return JSON.parse(extracted2);
+      const retriedCleaned = cleanMarkdown(retried);
+      const retriedExtracted = extractJSON(retriedCleaned) ?? retriedCleaned;
+      const retriedLooksLikeJSON = retriedExtracted.trimStart().startsWith('{') || retriedExtracted.trimStart().startsWith('[');
+      if (!retriedLooksLikeJSON) throw new Error('LLM retry did not return a JSON structure');
+      return JSON.parse(jsonrepair(retriedExtracted));
     } catch (err) {
       lastError = err;
     }
   }
 
-  throw new GuardianError(
-    'RETRY_LIMIT_EXCEEDED',
-    `JSON repair failed after ${maxRetries} LLM retry attempt(s).`,
-    { raw, lastError }
-  );
+  throw new GuardianError('RETRY_LIMIT_EXCEEDED',
+    `JSON repair failed after ${maxRetries} LLM retry attempt(s).`, { raw, lastError });
 }

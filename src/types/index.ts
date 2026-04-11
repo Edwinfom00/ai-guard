@@ -22,7 +22,13 @@ export type PIIType =
   | 'ssn'
   | 'ipAddress'
   | 'url'
-  | 'iban';
+  | 'iban'
+  // International
+  | 'nir'
+  | 'siret'
+  | 'siren'
+  | 'passport'
+  | 'dateOfBirth';
 
 export interface PIIMatch {
   type: PIIType;
@@ -123,6 +129,16 @@ export interface GuardianConfig<T = unknown> {
   schema?: SchemaConfig<T>;
   injection?: InjectionConfig;
   budget?: BudgetConfig;
+  /** Canary token — detect system prompt leakage */
+  canary?: import('../modules/canary/index.js').CanaryConfig;
+  /** Content policy — toxicity, hate, violence, self-harm */
+  content?: import('../modules/content/detector.js').ContentConfig;
+  /** Hallucination detection against RAG source documents */
+  hallucination?: import('../modules/hallucination/detector.js').HallucinationConfig;
+  /** Per-user / per-key rate limiting */
+  rateLimit?: import('../modules/ratelimit/index.js').RateLimitConfig;
+  /** Audit log callback — called after every protect() */
+  onAudit?: import('../modules/audit/index.js').AuditHandler;
 }
 
 export interface GuardianMeta {
@@ -131,6 +147,13 @@ export interface GuardianMeta {
   budget: BudgetUsage | null;
   repairAttempts: number;
   durationMs: number;
+  /** Canary token leak detected */
+  canaryLeaked: boolean;
+  /** Content policy violation detected */
+  contentViolation: boolean;
+  /** Hallucination suspected */
+  hallucinationSuspected: boolean;
+  hallucinationScore: number;
 }
 
 export interface GuardianResult<T> {

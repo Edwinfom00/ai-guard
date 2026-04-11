@@ -1,6 +1,6 @@
 {
   "name": "@edwinfom/ai-guard",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A security middleware for AI API responses — PII redaction, schema enforcement, prompt injection detection, and budget sentinel.",
   "author": {
     "name": "Edwin Fom",
@@ -49,6 +49,16 @@
       "types": "./dist/modules/budget/index.d.ts",
       "import": "./dist/modules/budget/index.js",
       "require": "./dist/modules/budget/index.cjs"
+    },
+    "./adapters/vercel": {
+      "types": "./dist/adapters/vercel.d.ts",
+      "import": "./dist/adapters/vercel.js",
+      "require": "./dist/adapters/vercel.cjs"
+    },
+    "./adapters/langchain": {
+      "types": "./dist/adapters/langchain.d.ts",
+      "import": "./dist/adapters/langchain.js",
+      "require": "./dist/adapters/langchain.cjs"
     }
   },
   "files": [
@@ -85,10 +95,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Edwinfom00/ai-guard.git"
+    "url": "git+https://github.com/Edwinfom00/ai-guard.git"
   },
   "bugs": {
     "url": "https://github.com/Edwinfom00/ai-guard/issues"
   },
-  "homepage": "https://github.com/Edwinfom00/ai-guard#readme"
+  "homepage": "https://github.com/Edwinfom00/ai-guard#readme",
+  "dependencies": {
+    "jsonrepair": "^3.13.3"
+  }
 }

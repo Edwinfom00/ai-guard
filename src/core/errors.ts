@@ -8,7 +8,10 @@ export type GuardianErrorCode =
   | 'PROMPT_INJECTION_DETECTED'
   | 'BUDGET_EXCEEDED'
   | 'ADAPTER_PARSE_FAILED'
-  | 'RETRY_LIMIT_EXCEEDED';
+  | 'RETRY_LIMIT_EXCEEDED'
+  | 'CONTENT_POLICY_VIOLATION'
+  | 'HALLUCINATION_SUSPECTED'
+  | 'RATE_LIMIT_EXCEEDED';
 
 export class GuardianError extends Error {
   readonly code: GuardianErrorCode;

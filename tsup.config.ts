@@ -7,6 +7,8 @@ export default defineConfig({
     'modules/schema/index': 'src/modules/schema/index.ts',
     'modules/injection/index': 'src/modules/injection/index.ts',
     'modules/budget/index': 'src/modules/budget/index.ts',
+    'adapters/vercel': 'src/adapters/vercel.ts',
+    'adapters/langchain': 'src/adapters/langchain.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,
