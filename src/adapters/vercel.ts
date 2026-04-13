@@ -1,4 +1,4 @@
-import type { Guardian } from '../core/Guardian.js';
+import { Guardian } from '../core/Guardian.js';
 import type { GuardianConfig, GuardianResult } from '../types/index.js';
 import { collectStream } from '../utils/stream.js';
 
@@ -78,8 +78,7 @@ export function createVercelGuard<T = string>(
   callFn: (safePrompt: string) => VercelStreamTextResult | Promise<VercelStreamTextResult>,
   prompt?: string
 ) => Promise<GuardianResult<T>> {
-  const { Guardian: GuardianClass } = require('../core/Guardian.js') as { Guardian: typeof Guardian };
-  const guard = new GuardianClass<T>(config);
+  const guard = new Guardian<T>(config);
   return (callFn, prompt = '') => guardVercelStream(guard, callFn, prompt);
 }
 

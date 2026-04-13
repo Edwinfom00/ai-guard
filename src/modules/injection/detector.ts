@@ -48,9 +48,13 @@ export function detectInjection(text: string, config: InjectionConfig): Injectio
 
   const detected = maxScore >= threshold;
 
-  if (detected && config.throwOnDetection !== false) {
-    throw new InjectionError(matches, maxScore);
+  // Cumulative scoring: multiple matches increase confidence
+  const cumulativeScore = Math.min(1, maxScore + 0.1 * Math.max(0, matches.length - 1));
+  const detectedFinal = cumulativeScore >= threshold;
+
+  if (detectedFinal && config.throwOnDetection !== false) {
+    throw new InjectionError(matches, cumulativeScore);
   }
 
-  return { detected, score: maxScore, matches };
+  return { detected: detectedFinal, score: cumulativeScore, matches };
 }

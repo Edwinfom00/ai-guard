@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { estimateTokens } from '../../../src/modules/budget/tokenizer.js';
-import { buildUsage, checkBudget, calculateCost } from '../../../src/modules/budget/sentinel.js';
+import { buildUsage, checkBudget, calculateCost, registerModelPricing } from '../../../src/modules/budget/sentinel.js';
 import { BudgetError } from '../../../src/core/errors.js';
 
 describe('estimateTokens', () => {
@@ -86,5 +86,40 @@ describe('checkBudget', () => {
     const usage = buildUsage('', '', 'gpt-4o-mini', 100, 0);
     checkBudget(usage, { maxTokens: 1000, onWarning });
     expect(onWarning).not.toHaveBeenCalled();
+  });
+});
+
+describe('custom model pricing', () => {
+  it('returns 0 cost for unknown custom model without registration', () => {
+    const cost = calculateCost(1000, 500, 'my-custom-model');
+    expect(cost).toBe(0);
+  });
+
+  it('calculates cost after registerModelPricing', () => {
+    registerModelPricing('my-custom-model', { input: 1.00, output: 2.00 });
+    // 1000 input @ $1/1M + 500 output @ $2/1M
+    const cost = calculateCost(1000, 500, 'my-custom-model');
+    expect(cost).toBeCloseTo(0.000001 * 1000 + 0.000002 * 500, 8);
+  });
+
+  it('buildUsage works with custom model string', () => {
+    registerModelPricing('ollama/llama3', { input: 0.00, output: 0.00 });
+    const usage = buildUsage('hello', 'world', 'ollama/llama3', 10, 5);
+    expect(usage.model).toBe('ollama/llama3');
+    expect(usage.totalTokens).toBe(15);
+    expect(usage.estimatedCostUSD).toBe(0);
+  });
+
+  it('Guardian accepts custom model string in budget config', async () => {
+    const { Guardian } = await import('../../../src/core/Guardian.js');
+    registerModelPricing('my-fine-tuned-v1', { input: 0.50, output: 1.00 });
+    const guard = new Guardian({
+      budget: { model: 'my-fine-tuned-v1', maxTokens: 10000 },
+    });
+    const result = await guard.protect(
+      async () => ({ choices: [{ message: { content: 'ok' } }], usage: { prompt_tokens: 10, completion_tokens: 5 } }),
+      'test'
+    );
+    expect(result.meta.budget?.model).toBe('my-fine-tuned-v1');
   });
 });

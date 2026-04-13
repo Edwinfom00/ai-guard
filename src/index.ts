@@ -12,7 +12,7 @@ export {
 export { detectPII, redactPII } from './modules/pii/index.js';
 export { enforce, repairAndParse, cleanMarkdown, extractJSON, repairJSON } from './modules/schema/index.js';
 export { detectInjection } from './modules/injection/index.js';
-export { buildUsage, checkBudget, calculateCost, estimateTokens } from './modules/budget/index.js';
+export { buildUsage, checkBudget, calculateCost, estimateTokens, registerModelPricing } from './modules/budget/index.js';
 export { generateCanaryToken, injectCanary, checkCanaryLeak } from './modules/canary/index.js';
 export { detectContent } from './modules/content/index.js';
 export { detectHallucination, extractEntities } from './modules/hallucination/index.js';
@@ -43,6 +43,7 @@ export type {
   InjectionSensitivity,
   BudgetConfig,
   BudgetUsage,
+  KnownModel,
   SupportedModel,
   NormalizedResponse,
 } from './types/index.js';

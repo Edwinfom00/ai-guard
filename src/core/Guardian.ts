@@ -59,7 +59,7 @@ export class Guardian<T = unknown> {
       hallucinationScore: 1,
     };
 
-    // ── 0. Rate Limiting ──────────────────────────────────────────────────────
+    // ── 0. Rate Limiting (requests only — tokens updated after budget step) ──
     this.rateLimiter?.check(prompt);
 
     // ── 1. INPUT: PII Redaction ───────────────────────────────────────────────
@@ -135,8 +135,10 @@ export class Guardian<T = unknown> {
       );
       checkBudget(usage, this.config.budget);
       meta.budget = usage;
-      // Update rate limiter with real token count
-      this.rateLimiter?.check(prompt, usage.totalTokens);
+      // Update rate limiter token count (separate from request count already incremented)
+      if (this.rateLimiter) {
+        this.rateLimiter.addTokens(prompt, usage.totalTokens);
+      }
     }
 
     // ── 12. Schema Enforcement + Auto-Repair ──────────────────────────────────
@@ -240,7 +242,7 @@ export class Guardian<T = unknown> {
       if (pct > 0.8) summary.push(`Budget at ${Math.round(pct * 100)}% of limit`);
     }
 
-    const overallRisk = computeRisk(injectionResult.score, promptPII, contentResult, outputReport);
+    const { overallRisk, riskScore } = computeRisk(injectionResult.score, promptPII, contentResult, outputReport);
     if (summary.length === 0) summary.push('No issues detected');
 
     return {
@@ -248,6 +250,7 @@ export class Guardian<T = unknown> {
       output: outputReport,
       budget: budgetReport,
       overallRisk,
+      riskScore,
       summary,
     };
   }
@@ -258,13 +261,23 @@ function computeRisk(
   promptPII: unknown[],
   content: { detected: boolean; score: number },
   output: InspectReport['output']
-): InspectReport['overallRisk'] {
-  if (injectionScore >= 0.9 || content.score >= 0.9) return 'critical';
-  if (injectionScore >= 0.75 || content.detected) return 'high';
-  if (promptPII.length > 0 && injectionScore >= 0.5) return 'high';
-  if (promptPII.length > 0 || (output && !output.schemaValid)) return 'medium';
-  if (output && output.pii.length > 0) return 'medium';
-  if (injectionScore >= 0.5) return 'low';
-  if (output && output.repairAttempts > 0) return 'low';
-  return 'safe';
+): { overallRisk: InspectReport['overallRisk']; riskScore: number } {
+  let riskScore = 0;
+
+  if (injectionScore >= 0.9 || content.score >= 0.9) riskScore = Math.max(riskScore, 1.0);
+  else if (injectionScore >= 0.75 || content.detected) riskScore = Math.max(riskScore, 0.8);
+  else if (promptPII.length > 0 && injectionScore >= 0.5) riskScore = Math.max(riskScore, 0.75);
+  else if (promptPII.length > 0 || (output && !output.schemaValid)) riskScore = Math.max(riskScore, 0.5);
+  else if (output && output.pii.length > 0) riskScore = Math.max(riskScore, 0.5);
+  else if (injectionScore >= 0.5) riskScore = Math.max(riskScore, 0.3);
+  else if (output && output.repairAttempts > 0) riskScore = Math.max(riskScore, 0.2);
+
+  let overallRisk: InspectReport['overallRisk'];
+  if (riskScore >= 1.0) overallRisk = 'critical';
+  else if (riskScore >= 0.75) overallRisk = 'high';
+  else if (riskScore >= 0.5) overallRisk = 'medium';
+  else if (riskScore >= 0.2) overallRisk = 'low';
+  else overallRisk = 'safe';
+
+  return { overallRisk, riskScore };
 }

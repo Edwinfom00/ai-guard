@@ -44,7 +44,7 @@ export class RateLimiter {
    * Checks and increments the rate limit for the given prompt.
    * Throws GuardianError if the limit is exceeded.
    */
-  check(prompt: string, tokensUsed = 0): void {
+  check(prompt: string): void {
     const key = this.config.keyFn(prompt);
     const now = Date.now();
 
@@ -57,7 +57,6 @@ export class RateLimiter {
     }
 
     bucket.requests++;
-    bucket.tokens += tokensUsed;
 
     if (bucket.requests > this.config.maxRequests) {
       throw new GuardianError(
@@ -66,6 +65,18 @@ export class RateLimiter {
         { key, requests: bucket.requests, limit: this.config.maxRequests }
       );
     }
+  }
+
+  /**
+   * Adds token usage to the bucket after a provider call completes.
+   * Throws if the token limit is exceeded.
+   */
+  addTokens(prompt: string, tokensUsed: number): void {
+    const key = this.config.keyFn(prompt);
+    const bucket = this.buckets.get(key);
+    if (!bucket) return;
+
+    bucket.tokens += tokensUsed;
 
     if (bucket.tokens > this.config.maxTokens) {
       throw new GuardianError(

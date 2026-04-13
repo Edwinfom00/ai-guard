@@ -29,7 +29,14 @@ export function extractEntities(text: string): string[] {
   const quoted = text.match(/"([^"]{3,50})"/g) ?? [];
   quoted.forEach((q) => entities.add(q.replace(/"/g, '').trim()));
 
-  return [...entities].filter((e) => e.length > 2);
+  return [...entities].filter((e) => {
+    if (e.length <= 2) return false;
+    // Ignore standalone small numbers (1–999) — too common to be meaningful
+    if (/^\d{1,3}$/.test(e)) return false;
+    // Ignore pure punctuation/symbols
+    if (/^[^a-zA-Z0-9]+$/.test(e)) return false;
+    return true;
+  });
 }
 
 export function detectHallucination(

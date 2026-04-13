@@ -1,7 +1,6 @@
 import type { PIIConfig, PIIMatch, PIIType } from '../../types/index.js';
 import { detectPII } from './detector.js';
-
-const ALL_TYPES: PIIType[] = ['email', 'phone', 'creditCard', 'ssn', 'ipAddress', 'iban', 'url'];
+import { ALL_PII_TYPES } from './patterns.js';
 
 const defaultReplaceWith = (type: PIIType): string => `[REDACTED:${type.toUpperCase()}]`;
 
@@ -15,7 +14,7 @@ export interface RedactionResult {
  * Returns the sanitized text and the list of what was redacted.
  */
 export function redactPII(text: string, config: PIIConfig = {}): RedactionResult {
-  const targets = config.targets ?? ALL_TYPES;
+  const targets = config.targets ?? ALL_PII_TYPES;
   const replaceWith = config.replaceWith ?? defaultReplaceWith;
 
   const rawMatches = detectPII(text, targets);
