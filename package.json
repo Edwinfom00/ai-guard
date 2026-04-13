@@ -1,6 +1,6 @@
 {
   "name": "@edwinfom/ai-guard",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A security middleware for AI API responses — PII redaction, schema enforcement, prompt injection detection, and budget sentinel.",
   "author": {
     "name": "Edwin Fom",
@@ -59,6 +59,31 @@
       "types": "./dist/adapters/langchain.d.ts",
       "import": "./dist/adapters/langchain.js",
       "require": "./dist/adapters/langchain.cjs"
+    },
+    "./canary": {
+      "types": "./dist/modules/canary/index.d.ts",
+      "import": "./dist/modules/canary/index.js",
+      "require": "./dist/modules/canary/index.cjs"
+    },
+    "./content": {
+      "types": "./dist/modules/content/index.d.ts",
+      "import": "./dist/modules/content/index.js",
+      "require": "./dist/modules/content/index.cjs"
+    },
+    "./hallucination": {
+      "types": "./dist/modules/hallucination/index.d.ts",
+      "import": "./dist/modules/hallucination/index.js",
+      "require": "./dist/modules/hallucination/index.cjs"
+    },
+    "./ratelimit": {
+      "types": "./dist/modules/ratelimit/index.d.ts",
+      "import": "./dist/modules/ratelimit/index.js",
+      "require": "./dist/modules/ratelimit/index.cjs"
+    },
+    "./audit": {
+      "types": "./dist/modules/audit/index.d.ts",
+      "import": "./dist/modules/audit/index.js",
+      "require": "./dist/modules/audit/index.cjs"
     }
   },
   "files": [
@@ -72,6 +97,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "smoke": "npm run build && npx tsx smoke-test.mts",
     "lint": "tsc --noEmit",
     "prepublishOnly": "npm run build && npm run test"
   },
@@ -100,8 +126,9 @@
   "bugs": {
     "url": "https://github.com/Edwinfom00/ai-guard/issues"
   },
-  "homepage": "https://github.com/Edwinfom00/ai-guard#readme",
+  "homepage": "https://packages.edwinfom.dev",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "jsonrepair": "^3.13.3"
   }
 }

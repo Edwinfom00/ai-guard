@@ -21,6 +21,8 @@ export interface InspectReport {
   budget: BudgetUsage | null;
   /** Overall risk level computed from all findings */
   overallRisk: RiskLevel;
+  /** Numeric risk score 0–1 for custom thresholds */
+  riskScore: number;
   /** Human-readable summary of findings */
   summary: string[];
 }

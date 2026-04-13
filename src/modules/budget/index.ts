@@ -1,2 +1,2 @@
-export { buildUsage, checkBudget, calculateCost } from './sentinel.js';
+export { buildUsage, checkBudget, calculateCost, registerModelPricing } from './sentinel.js';
 export { estimateTokens, estimateTokensByChars } from './tokenizer.js';

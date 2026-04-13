@@ -1,6 +1,6 @@
 # @edwinfom/ai-guard
 
-> A security middleware for AI API responses — PII redaction, schema enforcement, prompt injection detection, budget sentinel, and more.
+> Security middleware for AI API responses — PII redaction, schema enforcement, prompt injection detection, budget sentinel, and more.
 
 [![npm version](https://img.shields.io/npm/v/@edwinfom/ai-guard.svg)](https://www.npmjs.com/package/@edwinfom/ai-guard)
 [![license](https://img.shields.io/npm/l/@edwinfom/ai-guard.svg)](./LICENSE)
@@ -12,16 +12,16 @@
 
 When integrating AI APIs (OpenAI, Anthropic, Gemini) into production applications, developers face recurring pain points with no standardized solution:
 
-- **Malformed JSON** — LLMs sometimes wrap responses in markdown fences or add explanatory text, crashing your pipeline.
-- **PII leakage** — Users send passwords or card numbers in prompts. AI responses can echo back sensitive data from your RAG database.
-- **Prompt injection** — Malicious users try to override your system prompt with "Ignore all previous instructions…"
-- **System prompt theft** — An attacker tricks the AI into repeating your confidential instructions.
-- **Toxic or harmful content** — No built-in content moderation between the LLM and your users.
-- **Hallucinations in RAG** — The AI invents facts not present in your source documents.
-- **Surprise billing** — Token usage spikes without any warning or hard limit.
-- **Abuse** — A single user floods your endpoint with requests.
+- Malformed JSON — LLMs sometimes wrap responses in markdown fences or add explanatory text, crashing your pipeline.
+- PII leakage — Users send passwords or card numbers in prompts. AI responses can echo back sensitive data from your RAG database.
+- Prompt injection — Malicious users try to override your system prompt with "Ignore all previous instructions..."
+- System prompt theft — An attacker tricks the AI into repeating your confidential instructions.
+- Toxic or harmful content — No built-in content moderation between the LLM and your users.
+- Hallucinations in RAG — The AI invents facts not present in your source documents.
+- Surprise billing — Token usage spikes without any warning or hard limit.
+- Abuse — A single user floods your endpoint with requests.
 
-`@edwinfom/ai-guard` acts as a **security membrane** between your application and any AI provider. One wrapper, all protections.
+`@edwinfom/ai-guard` acts as a security membrane between your application and any AI provider. One wrapper, all protections.
 
 ```typescript
 import { Guardian } from '@edwinfom/ai-guard';
@@ -56,20 +56,20 @@ console.log(result.meta.canaryLeaked); // false — system prompt was not leaked
 
 | Feature | Description |
 |---|---|
-| **PII Redaction** | Emails, phones, credit cards (Luhn-validated), SSNs, IBANs, IPs, URLs + **French NIR, SIRET, SIREN, passports, dates of birth** |
-| **3-Level Schema Repair** | Strip markdown → `jsonrepair` (100+ broken patterns) → LLM retry |
-| **Injection Detection** | 15+ curated attack patterns with configurable sensitivity |
-| **Canary Tokens** | Invisible tokens detect if the LLM leaked your system prompt |
-| **Content Policy** | Toxicity, hate speech, violence, self-harm, sexual content |
-| **Hallucination Detection** | Named-entity grounding check against your RAG source documents |
-| **Budget Sentinel** | Token counting + real cost for 10 models, hard limits + warnings |
-| **Rate Limiter** | Per-user sliding-window request and token limits |
-| **Audit Log** | Structured callback after every `protect()` call |
-| **Streaming Support** | `protectStream()` — works with Vercel AI SDK, OpenAI streams, AsyncIterable |
-| **Dry-run Inspect** | `inspect()` — full risk report without blocking |
-| **Provider Agnostic** | OpenAI, Anthropic, Gemini, or any custom adapter |
-| **Tree-Shakeable** | Import only what you need via sub-paths |
-| **Zero mandatory deps** | Zod is optional. `jsonrepair` is the only runtime dependency. |
+| PII Redaction | Emails, phones, credit cards (Luhn-validated), SSNs, IBANs, IPs, URLs, French NIR, SIRET, SIREN, passports, dates of birth |
+| 3-Level Schema Repair | Strip markdown fences, `jsonrepair` (100+ broken patterns), LLM retry |
+| Injection Detection | 15+ curated attack patterns with cumulative scoring and configurable sensitivity |
+| Canary Tokens | Cryptographically random tokens detect if the LLM leaked your system prompt |
+| Content Policy | Toxicity, hate speech, violence, self-harm, sexual content |
+| Hallucination Detection | Named-entity grounding check against your RAG source documents |
+| Budget Sentinel | Token counting and real cost for 16 models, hard limits and warnings, custom model pricing |
+| Rate Limiter | Per-user sliding-window request and token limits |
+| Audit Log | Structured callback after every `protect()` call |
+| Streaming Support | `protectStream()` — works with Vercel AI SDK, OpenAI streams, AsyncIterable |
+| Dry-run Inspect | `inspect()` — full risk report with numeric `riskScore` without blocking |
+| Provider Agnostic | OpenAI, Anthropic, Gemini, or any custom adapter |
+| Tree-Shakeable | Dedicated sub-path exports for every module |
+| Zero mandatory deps | Zod is optional. `jsonrepair` is the only runtime dependency. |
 
 ---
 
@@ -98,12 +98,12 @@ npm install zod
 2. [Schema Enforcement + Auto-Repair](#1-schema-enforcement--auto-repair)
 3. [PII Redaction](#2-pii-redaction)
 4. [Prompt Injection Detection](#3-prompt-injection-detection)
-5. [Canary Tokens](#4-canary-tokens-new-in-v2)
-6. [Content Policy](#5-content-policy-new-in-v2)
-7. [Hallucination Detection](#6-hallucination-detection-new-in-v2)
+5. [Canary Tokens](#4-canary-tokens)
+6. [Content Policy](#5-content-policy)
+7. [Hallucination Detection](#6-hallucination-detection)
 8. [Budget Sentinel](#7-budget-sentinel)
-9. [Rate Limiter](#8-rate-limiter-new-in-v2)
-10. [Audit Log](#9-audit-log-new-in-v2)
+9. [Rate Limiter](#8-rate-limiter)
+10. [Audit Log](#9-audit-log)
 11. [Streaming Support](#10-streaming-support)
 12. [Dry-run Inspect](#11-dry-run-inspect)
 13. [Vercel AI SDK Adapter](#12-vercel-ai-sdk-adapter)
@@ -113,6 +113,8 @@ npm install zod
 17. [API Reference](#api-reference)
 18. [Error Types](#error-types)
 19. [Complete Example](#complete-example--nextjs-api-route)
+20. [Comparison](#what-makes-edwinfomaiguard-different)
+21. [Changelog](#changelog)
 
 ---
 
@@ -197,7 +199,7 @@ const result = await guard.protect(callFn, 'My card is 4532015112830366');
 // result.meta.piiRedacted → [{ type: 'creditCard', value: '4532015112830366', ... }]
 ```
 
-**Supported PII types (v2 adds international formats):**
+Supported PII types:
 
 | Type | Example | Region |
 |---|---|---|
@@ -208,13 +210,13 @@ const result = await guard.protect(callFn, 'My card is 4532015112830366');
 | `ipAddress` | `192.168.1.1` | Universal |
 | `iban` | `FR76 3000 6000 0112 3456 7890 189` | International |
 | `url` | `https://api.internal.com/secret?key=abc` | Universal |
-| `nir`*** | `1 85 02 75 115 423 57` |France |
-| `siret`*** | `732 829 320 00074` |France |
-| `siren`*** | `732 829 320` |France |
-| `passport`*** | `AB123456` | International |
-| `dateOfBirth`*** | `12/05/1990`, `1990-05-12` | Universal |
+| `nir` | `1 85 02 75 115 423 57` | France |
+| `siret` | `732 829 320 00074` | France |
+| `siren` | `732 829 320` | France |
+| `passport` | `AB123456` | International |
+| `dateOfBirth` | `12/05/1990`, `1990-05-12` | Universal |
 
->*** = new in v2. Credit cards are validated via the **Luhn algorithm** — no false positives on random digit sequences.
+Credit cards are validated via the Luhn algorithm — no false positives on random digit sequences.
 
 ---
 
@@ -240,7 +242,9 @@ try {
 }
 ```
 
-**Sensitivity thresholds:**
+Scoring is cumulative — each additional matching pattern increases the overall confidence score. A prompt that matches three patterns will score higher than one that matches only one, even if both cross the threshold.
+
+Sensitivity thresholds:
 
 | Level | Threshold | Use case |
 |---|---|---|
@@ -248,13 +252,13 @@ try {
 | `medium` | 0.75 | Balanced — recommended |
 | `high` | 0.50 | Aggressive, may have false positives |
 
-**Attack categories covered:** instruction override, role hijacking (DAN), system prompt extraction, shell/code injection, data exfiltration, indirect injection markers.
+Attack categories covered: instruction override, role hijacking (DAN), system prompt extraction, shell/code injection, data exfiltration, indirect injection markers.
 
 ---
 
-## 4. Canary Tokens*** new in v2
+## 4. Canary Tokens
 
-Canary tokens are invisible markers injected into your prompt. If the LLM echoes the marker back in its response, it means the model revealed your system prompt — a sign of prompt injection or jailbreak.
+Canary tokens are markers injected into your prompt. If the LLM echoes the marker back in its response, it means the model revealed your system prompt — a sign of prompt injection or jailbreak.
 
 ```typescript
 const guard = new Guardian({
@@ -269,16 +273,16 @@ const result = await guard.protect(callFn, prompt);
 console.log(result.meta.canaryLeaked); // false — system prompt was safe
 ```
 
-**How it works:**
-1. Before calling the AI, the guard appends an invisible token (e.g. `<!-- [CNRY​:X7K2P] -->`) to your prompt using zero-width Unicode characters.
+How it works:
+1. Before calling the AI, the guard generates a cryptographically random token using `crypto.randomUUID()` encoded as base64 and appends it to your prompt.
 2. After the AI responds, the guard checks if that token appears in the output.
-3. If it does → the AI leaked your prompt → `GuardianError` is thrown (or `meta.canaryLeaked = true` if `throwOnDetection: false`).
+3. If it does, the AI leaked your prompt. `GuardianError` is thrown, or `meta.canaryLeaked = true` if `throwOnDetection: false`.
 
-> **Why this matters:** This is the only reliable way to detect system prompt extraction attacks at runtime. No other JavaScript AI library offers this.
+> This is the only reliable way to detect system prompt extraction attacks at runtime. No other JavaScript AI library offers this.
 
 ---
 
-## 5. Content Policy*** new in v2
+## 5. Content Policy
 
 Detects harmful content in prompts and AI responses before it reaches your users.
 
@@ -319,7 +323,7 @@ console.log(result.meta.contentViolation); // true/false
 
 ---
 
-## 6. Hallucination Detection*** new in v2
+## 6. Hallucination Detection
 
 Verifies that key facts in the AI's response are actually present in your source documents. Essential for RAG (Retrieval-Augmented Generation) pipelines.
 
@@ -337,12 +341,14 @@ console.log(result.meta.hallucinationSuspected); // true/false
 console.log(result.meta.hallucinationScore);     // 0.45 — only 45% grounded
 ```
 
-**How it works:**
-The detector extracts **key entities** from the response (numbers, proper nouns, years, quoted strings) and checks whether each one appears in the source documents. If fewer than `threshold`% are grounded, hallucination is suspected.
+How it works:
+The detector extracts key entities from the response (numbers, proper nouns, years, quoted strings) and checks whether each one appears in the source documents. Trivial values — small integers between 1 and 999 and pure symbol strings — are filtered out before grounding checks to reduce noise. If fewer than `threshold`% of the remaining entities are grounded, hallucination is suspected.
 
 ```typescript
 // You can also use it standalone
 import { detectHallucination, extractEntities } from '@edwinfom/ai-guard';
+// or tree-shakeable:
+import { detectHallucination, extractEntities } from '@edwinfom/ai-guard/hallucination';
 
 const entities = extractEntities('Revenue grew 23% in 2024 according to John Smith.');
 // ['23%', '2024', 'John Smith']
@@ -373,24 +379,53 @@ console.log(result.meta.budget);
 // { inputTokens: 312, outputTokens: 89, totalTokens: 401, estimatedCostUSD: 0.000060, model: 'gpt-4o-mini' }
 ```
 
-**Supported models and pricing (per 1M tokens):**
+### Custom Model Pricing
+
+`SupportedModel` accepts any string, not just the built-in list. For models not in the table below, register pricing before creating your `Guardian` instance:
+
+```typescript
+import { registerModelPricing } from '@edwinfom/ai-guard';
+// or tree-shakeable:
+import { registerModelPricing } from '@edwinfom/ai-guard/budget';
+
+// Register a fine-tuned model or a self-hosted model
+registerModelPricing('my-fine-tuned-gpt4o', { input: 5.00, output: 15.00 });
+registerModelPricing('ollama/llama3-custom', { input: 0.00, output: 0.00 });
+
+const guard = new Guardian({
+  budget: {
+    model:      'my-fine-tuned-gpt4o', // TypeScript accepts any string
+    maxCostUSD: 0.10,
+  },
+});
+```
+
+Known model names still have full TypeScript autocomplete. Custom model names are accepted as plain strings. If a model has no registered pricing, cost is reported as `0` and no `BudgetError` is thrown for cost limits.
+
+Supported models and pricing (per 1M tokens):
 
 | Model | Input | Output |
 |---|---|---|
 | `gpt-4o` | $2.50 | $10.00 |
 | `gpt-4o-mini` | $0.15 | $0.60 |
+| `gpt-4.1` | $2.00 | $8.00 |
+| `gpt-4.1-mini` | $0.40 | $1.60 |
 | `gpt-4-turbo` | $10.00 | $30.00 |
 | `gpt-3.5-turbo` | $0.50 | $1.50 |
+| `claude-3-7-sonnet-20250219` | $3.00 | $15.00 |
 | `claude-3-5-sonnet-20241022` | $3.00 | $15.00 |
 | `claude-3-5-haiku-20241022` | $0.80 | $4.00 |
 | `claude-3-opus-20240229` | $15.00 | $75.00 |
+| `gemini-2.5-pro` | $1.25 | $10.00 |
+| `gemini-2.0-flash` | $0.10 | $0.40 |
 | `gemini-1.5-pro` | $1.25 | $5.00 |
 | `gemini-1.5-flash` | $0.075 | $0.30 |
-| `gemini-2.0-flash` | $0.10 | $0.40 |
+| `mistral-large-2411` | $2.00 | $6.00 |
+| `llama-3.3-70b` | $0.59 | $0.79 |
 
 ---
 
-## 8. Rate Limiter*** new in v2
+## 8. Rate Limiter
 
 Prevents abuse by limiting requests and token usage per user (or globally).
 
@@ -418,18 +453,21 @@ You can also use the rate limiter standalone:
 
 ```typescript
 import { RateLimiter } from '@edwinfom/ai-guard';
+// or tree-shakeable:
+import { RateLimiter } from '@edwinfom/ai-guard/ratelimit';
 
 const limiter = new RateLimiter({ maxRequests: 5, windowMs: 10_000 });
-limiter.check(prompt);               // throws if exceeded
-limiter.getUsage(prompt);            // { requests: 3, tokens: 0, windowStart: ... }
-limiter.reset();                     // clear all buckets (useful for tests)
+limiter.check(prompt);    // throws if limit exceeded
+limiter.addTokens(count); // record token usage separately
+limiter.getUsage(prompt); // { requests: 3, tokens: 0, windowStart: ... }
+limiter.reset();          // clear all buckets (useful for tests)
 ```
 
 > **Note:** The rate limiter is in-memory and process-local. For multi-instance deployments (serverless, Kubernetes), use a shared store like Redis with a custom implementation.
 
 ---
 
-## 9. Audit Log*** new in v2
+## 9. Audit Log
 
 Every `protect()` call fires a structured audit entry. Use it for logging, compliance, and monitoring dashboards.
 
@@ -517,11 +555,17 @@ const report = await guard.inspect(
   '{"name":"Edwin"}'                   // optional: raw output to analyze
 );
 
-console.log(report.overallRisk);   // 'critical' | 'high' | 'medium' | 'low' | 'safe'
-console.log(report.summary);       // ['Prompt injection detected (score: 0.90)']
-console.log(report.prompt.pii);    // PII found in prompt
-console.log(report.output?.pii);   // PII found in output
-console.log(report.budget);        // estimated cost
+console.log(report.overallRisk); // 'critical' | 'high' | 'medium' | 'low' | 'safe'
+console.log(report.riskScore);   // 0.92 — numeric score 0-1 for custom thresholds
+console.log(report.summary);     // ['Prompt injection detected (score: 0.90)']
+console.log(report.prompt.pii);  // PII found in prompt
+console.log(report.output?.pii); // PII found in output
+console.log(report.budget);      // estimated cost
+
+// Use riskScore for custom gating logic
+if (report.riskScore > 0.7) {
+  // block or flag for review
+}
 ```
 
 ---
@@ -603,14 +647,36 @@ const parser = repairLangChainOutput(mySchemaConfig);
 
 ## 14. Tree-Shakeable Sub-paths
 
-Use only what you need — zero dead code in your bundle:
+Every module has a dedicated sub-path export. Import only what you need — no dead code in your bundle.
 
 ```typescript
 import { redactPII, detectPII }           from '@edwinfom/ai-guard/pii';
 import { repairAndParse, repairJSON }      from '@edwinfom/ai-guard/schema';
 import { detectInjection }                from '@edwinfom/ai-guard/injection';
-import { buildUsage, calculateCost }      from '@edwinfom/ai-guard/budget';
+import { buildUsage, calculateCost,
+         registerModelPricing }           from '@edwinfom/ai-guard/budget';
+import { generateCanaryToken,
+         checkCanaryLeak }                from '@edwinfom/ai-guard/canary';
+import { detectContent }                  from '@edwinfom/ai-guard/content';
+import { detectHallucination,
+         extractEntities }                from '@edwinfom/ai-guard/hallucination';
+import { RateLimiter }                    from '@edwinfom/ai-guard/ratelimit';
+import { buildAuditEntry }                from '@edwinfom/ai-guard/audit';
 ```
+
+All sub-paths ship both ESM and CJS builds with full TypeScript declarations.
+
+| Sub-path | Contents |
+|---|---|
+| `@edwinfom/ai-guard/pii` | `detectPII`, `redactPII` |
+| `@edwinfom/ai-guard/schema` | `enforce`, `repairAndParse`, `repairJSON`, `cleanMarkdown`, `extractJSON` |
+| `@edwinfom/ai-guard/injection` | `detectInjection` |
+| `@edwinfom/ai-guard/budget` | `buildUsage`, `checkBudget`, `calculateCost`, `estimateTokens`, `registerModelPricing` |
+| `@edwinfom/ai-guard/canary` | `generateCanaryToken`, `injectCanary`, `checkCanaryLeak` |
+| `@edwinfom/ai-guard/content` | `detectContent` |
+| `@edwinfom/ai-guard/hallucination` | `detectHallucination`, `extractEntities` |
+| `@edwinfom/ai-guard/ratelimit` | `RateLimiter` |
+| `@edwinfom/ai-guard/audit` | `buildAuditEntry` |
 
 ---
 
@@ -694,6 +760,7 @@ Dry-run analysis. Returns `InspectReport`:
   output:      { pii: PIIMatch[], schemaValid: boolean, repairAttempts: number } | null,
   budget:      BudgetUsage | null,
   overallRisk: 'safe' | 'low' | 'medium' | 'high' | 'critical',
+  riskScore:   number,  // 0-1 numeric score for custom threshold logic
   summary:     string[],
 }
 ```
@@ -824,6 +891,32 @@ cd ai-guard
 npm install
 npm test
 ```
+
+---
+
+## Changelog
+
+### v0.2.1
+
+New features:
+
+- Custom model pricing — `SupportedModel` now accepts any string. Known models retain autocomplete. Use `registerModelPricing(model, { input, output })` to register pricing for any custom or fine-tuned model.
+- Added `riskScore: number` (0–1) to `InspectReport` alongside the existing `overallRisk` string, enabling custom threshold logic.
+- Injection scoring is now cumulative — multiple pattern matches compound the confidence score rather than taking the maximum.
+- Hallucination detector now filters out trivial entities (integers 1–999, pure symbol strings) before grounding checks, reducing false positives.
+- All modules now have dedicated tree-shakeable sub-path exports: `/canary`, `/content`, `/hallucination`, `/ratelimit`, `/audit`.
+- Added 6 new models to the built-in pricing table: `gpt-4.1`, `gpt-4.1-mini`, `claude-3-7-sonnet-20250219`, `gemini-2.5-pro`, `mistral-large-2411`, `llama-3.3-70b`.
+
+Bug fixes:
+
+- Fixed an ESM `require()` compatibility error in `createVercelGuard` that caused failures in CommonJS environments.
+- PII redactor now covers all international types (`nir`, `siret`, `siren`, `passport`, `dateOfBirth`). Previously only 7 types were active.
+- Rate limiter no longer double-counts requests. `check()` and `addTokens()` are now separate operations.
+- Canary token generation now uses `crypto.randomUUID()` with base64 encoding instead of `Math.random()` with zero-width characters, improving reliability and detectability.
+
+### v0.2.0
+
+Initial release of the v2 feature set: canary tokens, content policy, hallucination detection, rate limiter, audit log, streaming support, and Vercel AI SDK adapter.
 
 ---
 

@@ -91,17 +91,29 @@ export interface InjectionMatch {
 
 // ─── Budget ───────────────────────────────────────────────────────────────────
 
-export type SupportedModel =
+export type KnownModel =
   | 'gpt-4o'
   | 'gpt-4o-mini'
+  | 'gpt-4.1'
+  | 'gpt-4.1-mini'
   | 'gpt-4-turbo'
   | 'gpt-3.5-turbo'
+  | 'claude-3-7-sonnet-20250219'
   | 'claude-3-5-sonnet-20241022'
   | 'claude-3-5-haiku-20241022'
   | 'claude-3-opus-20240229'
+  | 'gemini-2.5-pro'
+  | 'gemini-2.0-flash'
   | 'gemini-1.5-pro'
   | 'gemini-1.5-flash'
-  | 'gemini-2.0-flash';
+  | 'mistral-large-2411'
+  | 'llama-3.3-70b';
+
+/**
+ * Accepts any known model name (with autocomplete) OR any custom string.
+ * e.g. 'gpt-4o', 'my-fine-tuned-model', 'ollama/llama3', etc.
+ */
+export type SupportedModel = KnownModel | (string & {});
 
 export interface BudgetConfig {
   /** Maximum tokens allowed (input + output). Throws if exceeded. */

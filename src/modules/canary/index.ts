@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { GuardianError } from '../../core/errors.js';
 
 export interface CanaryConfig {
@@ -14,14 +15,13 @@ export interface CanaryResult {
 }
 
 /**
- * Generates a cryptographically random canary token.
- * Uses zero-width unicode chars between segments to make it
- * nearly impossible for the LLM to reproduce naturally.
+ * Generates a cryptographically random canary token using crypto.randomUUID().
+ * Encoded in base64 to resist LLM normalization and zero-width char stripping.
  */
 export function generateCanaryToken(prefix = 'CNRY'): string {
-  const rand = Math.random().toString(36).slice(2, 9).toUpperCase();
-  // \u200B = zero-width space — invisible in UI but detectable in output
-  return `[${prefix}\u200B:${rand}]`;
+  const uuid = randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase();
+  const encoded = Buffer.from(uuid).toString('base64');
+  return `[${prefix}:${encoded}]`;
 }
 
 /**
@@ -41,9 +41,7 @@ export function checkCanaryLeak(
   token: string,
   config: CanaryConfig
 ): CanaryResult {
-  // Strip zero-width spaces for comparison — some models may strip them
-  const normalize = (s: string) => s.replace(/\u200B/g, '');
-  const leaked = normalize(output).includes(normalize(token));
+  const leaked = output.includes(token);
 
   if (leaked && config.throwOnLeak !== false) {
     throw new GuardianError(
