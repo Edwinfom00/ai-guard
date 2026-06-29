@@ -2,6 +2,7 @@ import type { GuardianMeta } from '../../types/index.js';
 
 export interface AuditEntry {
   timestamp: string;
+  sessionId?: string | undefined;
   /** SHA-256-like hash of the prompt (first 8 chars for privacy) */
   promptHash: string;
   promptLength: number;
@@ -44,10 +45,12 @@ export function buildAuditEntry(
     contentViolation?: boolean;
     hallucinationSuspected?: boolean;
     hallucinationScore?: number;
+    sessionId?: string | undefined;
   } = {}
 ): AuditEntry {
   return {
     timestamp: new Date().toISOString(),
+    sessionId: extras.sessionId,
     promptHash: hashPrompt(prompt),
     promptLength: prompt.length,
     outputLength: outputText.length,

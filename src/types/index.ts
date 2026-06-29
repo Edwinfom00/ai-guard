@@ -47,6 +47,8 @@ export interface PIIConfig {
   onInput?: boolean;
   /** Apply PII redaction on output response. Default: true */
   onOutput?: boolean;
+  /** Enable reversible anonymization (re-hydration). Default: false */
+  reversible?: boolean;
 }
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -81,6 +83,12 @@ export interface InjectionConfig {
   customPatterns?: RegExp[];
   /** Throw an error when injection is detected. Default: true */
   throwOnDetection?: boolean;
+  /** Enable semantic vector-similarity detection. Default: false */
+  semantic?: boolean;
+  /** Cosine similarity threshold for semantic injection. Default: 0.85 */
+  semanticThreshold?: number;
+  /** Custom embedding function for semantic checks. */
+  embedFn?: (text: string) => Promise<number[]>;
 }
 
 export interface InjectionMatch {
@@ -151,6 +159,13 @@ export interface GuardianConfig<T = unknown> {
   rateLimit?: import('../modules/ratelimit/index.js').RateLimitConfig;
   /** Audit log callback — called after every protect() */
   onAudit?: import('../modules/audit/index.js').AuditHandler;
+  /** Fallback providers when the main call fails or budget is near limit */
+  fallbacks?: Array<{
+    callFn: (safePrompt: string) => Promise<unknown>;
+    model?: string;
+  }>;
+  /** Semantic response cache configuration */
+  semanticCache?: import('../modules/cache/semantic.js').SemanticCacheConfig;
 }
 
 export interface GuardianMeta {

@@ -1,4 +1,10 @@
 import { GuardianError } from '../../core/errors.js';
+import { RateLimitStore, InMemoryStore } from './store.js';
+
+export type { RateLimitStore } from './store.js';
+export { InMemoryStore } from './store.js';
+export { RedisRateLimitStore } from './redis.js';
+export type { GenericRedisClient } from './redis.js';
 
 export interface RateLimitConfig {
   /** Max requests per time window. Default: 60 */
@@ -12,6 +18,8 @@ export interface RateLimitConfig {
    * Default: single global bucket (no per-user isolation).
    */
   keyFn?: (prompt: string) => string;
+  /** Optional custom store. Defaults to InMemoryStore. */
+  store?: RateLimitStore;
 }
 
 interface Bucket {
@@ -21,15 +29,13 @@ interface Bucket {
 }
 
 /**
- * In-memory sliding-window rate limiter.
- * Resets per-key counts every `windowMs` milliseconds.
- *
- * Note: This is process-local — for multi-instance deployments,
- * use a shared store (Redis) with a custom implementation.
+ * Rate limiter supporting memory or distributed Redis stores.
  */
 export class RateLimiter {
-  private readonly config: Required<Omit<RateLimitConfig, 'keyFn'>> & { keyFn: (p: string) => string };
-  private readonly buckets = new Map<string, Bucket>();
+  private readonly config: Required<Omit<RateLimitConfig, 'keyFn' | 'store'>> & {
+    keyFn: (p: string) => string;
+    store: RateLimitStore;
+  };
 
   constructor(config: RateLimitConfig = {}) {
     this.config = {
@@ -37,6 +43,7 @@ export class RateLimiter {
       maxTokens:   config.maxTokens   ?? 100_000,
       windowMs:    config.windowMs    ?? 60_000,
       keyFn:       config.keyFn       ?? (() => '__global__'),
+      store:       config.store       ?? new InMemoryStore(),
     };
   }
 
@@ -44,19 +51,9 @@ export class RateLimiter {
    * Checks and increments the rate limit for the given prompt.
    * Throws GuardianError if the limit is exceeded.
    */
-  check(prompt: string): void {
+  async check(prompt: string): Promise<void> {
     const key = this.config.keyFn(prompt);
-    const now = Date.now();
-
-    let bucket = this.buckets.get(key);
-
-    // Reset window if expired
-    if (!bucket || now - bucket.windowStart >= this.config.windowMs) {
-      bucket = { requests: 0, tokens: 0, windowStart: now };
-      this.buckets.set(key, bucket);
-    }
-
-    bucket.requests++;
+    const bucket = await this.config.store.incrementRequests(key, this.config.windowMs);
 
     if (bucket.requests > this.config.maxRequests) {
       throw new GuardianError(
@@ -71,12 +68,9 @@ export class RateLimiter {
    * Adds token usage to the bucket after a provider call completes.
    * Throws if the token limit is exceeded.
    */
-  addTokens(prompt: string, tokensUsed: number): void {
+  async addTokens(prompt: string, tokensUsed: number): Promise<void> {
     const key = this.config.keyFn(prompt);
-    const bucket = this.buckets.get(key);
-    if (!bucket) return;
-
-    bucket.tokens += tokensUsed;
+    const bucket = await this.config.store.addTokens(key, tokensUsed, this.config.windowMs);
 
     if (bucket.tokens > this.config.maxTokens) {
       throw new GuardianError(
@@ -88,12 +82,12 @@ export class RateLimiter {
   }
 
   /** Returns current usage for a key. */
-  getUsage(prompt: string): Bucket | null {
-    return this.buckets.get(this.config.keyFn(prompt)) ?? null;
+  async getUsage(prompt: string): Promise<Bucket | null> {
+    return await this.config.store.getUsage(this.config.keyFn(prompt));
   }
 
   /** Clears all buckets (useful for testing). */
-  reset(): void {
-    this.buckets.clear();
+  async reset(): Promise<void> {
+    await this.config.store.reset();
   }
 }

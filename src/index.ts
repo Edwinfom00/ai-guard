@@ -1,5 +1,7 @@
 // ─── Core ─────────────────────────────────────────────────────────────────────
 export { Guardian } from './core/Guardian.js';
+export { GuardianSession } from './core/GuardianSession.js';
+export type { GuardianSessionConfig } from './core/GuardianSession.js';
 export {
   GuardianError,
   SchemaValidationError,
@@ -16,8 +18,9 @@ export { buildUsage, checkBudget, calculateCost, estimateTokens, registerModelPr
 export { generateCanaryToken, injectCanary, checkCanaryLeak } from './modules/canary/index.js';
 export { detectContent } from './modules/content/index.js';
 export { detectHallucination, extractEntities } from './modules/hallucination/index.js';
-export { RateLimiter } from './modules/ratelimit/index.js';
+export { RateLimiter, InMemoryStore, RedisRateLimitStore } from './modules/ratelimit/index.js';
 export { buildAuditEntry } from './modules/audit/index.js';
+export { SemanticCache } from './modules/cache/semantic.js';
 
 // ─── Adapters ─────────────────────────────────────────────────────────────────
 export { guardVercelStream, createVercelGuard } from './adapters/vercel.js';
@@ -73,7 +76,13 @@ export type {
 } from './modules/hallucination/index.js';
 
 export type {
+  SemanticCacheConfig,
+} from './modules/cache/semantic.js';
+
+export type {
   RateLimitConfig,
+  RateLimitStore,
+  GenericRedisClient,
 } from './modules/ratelimit/index.js';
 
 export type {

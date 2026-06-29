@@ -19,6 +19,9 @@ import { detectContent } from '../modules/content/detector.js';
 import { detectHallucination } from '../modules/hallucination/detector.js';
 import { RateLimiter } from '../modules/ratelimit/index.js';
 import { buildAuditEntry } from '../modules/audit/index.js';
+import { GuardianSession } from './GuardianSession.js';
+import { SemanticCache } from '../modules/cache/semantic.js';
+import { getEmbedding } from '../utils/embeddings.js';
 
 const ALL_PII_TYPES: PIIType[] = [
   'email', 'phone', 'creditCard', 'ssn', 'ipAddress', 'iban', 'url',
@@ -29,11 +32,18 @@ export class Guardian<T = unknown> {
   private readonly config: GuardianConfig<T>;
   private readonly adapter: Adapter;
   private readonly rateLimiter: RateLimiter | null;
+  private readonly semanticCache: SemanticCache | null;
 
   constructor(config: GuardianConfig<T> = {}, adapter?: Adapter) {
     this.config = config;
     this.adapter = adapter ?? genericAdapter;
     this.rateLimiter = config.rateLimit ? new RateLimiter(config.rateLimit) : null;
+    this.semanticCache = config.semanticCache?.enabled
+      ? new SemanticCache({
+          maxSize: config.semanticCache.maxSize,
+          threshold: config.semanticCache.threshold,
+        })
+      : null;
   }
 
   /**
@@ -44,7 +54,8 @@ export class Guardian<T = unknown> {
    */
   async protect(
     callFn: (safePrompt: string) => Promise<unknown>,
-    prompt = ''
+    prompt = '',
+    options?: { session?: GuardianSession }
   ): Promise<GuardianResult<T>> {
     const start = Date.now();
     const meta: GuardianMeta = {
@@ -60,19 +71,69 @@ export class Guardian<T = unknown> {
     };
 
     // ── 0. Rate Limiting (requests only — tokens updated after budget step) ──
-    this.rateLimiter?.check(prompt);
+    if (this.rateLimiter) {
+      await this.rateLimiter.check(prompt);
+    }
+
+    if (options?.session && this.config.budget) {
+      options.session.checkBudget(this.config.budget);
+    }
 
     // ── 1. INPUT: PII Redaction ───────────────────────────────────────────────
     let safePrompt = prompt;
+    let inputTokensMap: Map<string, string> | undefined;
     if (prompt && this.config.pii?.onInput !== false) {
-      const { text, matches } = redactPII(prompt, this.config.pii);
+      const { text, matches, tokensMap } = redactPII(prompt, this.config.pii);
       safePrompt = text;
+      inputTokensMap = tokensMap;
       meta.piiRedacted.push(...matches);
+    }
+
+    // ── 1.5. Cache Lookup ──
+    let cacheKeyVector: number[] | null = null;
+    if (this.config.semanticCache?.enabled && this.semanticCache) {
+      try {
+        cacheKeyVector = await getEmbedding(safePrompt, this.config.semanticCache.embedFn);
+        const cached = this.semanticCache.find(cacheKeyVector);
+        if (cached) {
+          let outputText = cached.response;
+
+          // Re-hydrate input tokens for the matched cache hit
+          if (inputTokensMap && inputTokensMap.size > 0) {
+            for (const [token, originalValue] of inputTokensMap.entries()) {
+              outputText = outputText.split(token).join(originalValue);
+            }
+          }
+
+          meta.durationMs = Date.now() - start;
+          const entry = buildAuditEntry(prompt, outputText, meta, {
+            sessionId: options?.session?.sessionId,
+          });
+          if (options?.session) {
+            options.session.recordAudit(entry);
+          }
+          if (this.config.onAudit) {
+            void Promise.resolve(this.config.onAudit(entry)).catch(() => {});
+          }
+
+          let parsedData: T;
+          if (this.config.schema) {
+            const { data: validated } = await enforce<T>(outputText, this.config.schema);
+            parsedData = validated;
+          } else {
+            parsedData = outputText as unknown as T;
+          }
+
+          return { data: parsedData, raw: outputText, meta };
+        }
+      } catch (err) {
+        // Fallback on embedding errors
+      }
     }
 
     // ── 2. INPUT: Injection Detection ─────────────────────────────────────────
     if (prompt && this.config.injection?.enabled) {
-      const result = detectInjection(safePrompt, this.config.injection);
+      const result = await detectInjection(safePrompt, this.config.injection);
       meta.injectionDetected.push(...result.matches);
     }
 
@@ -86,11 +147,60 @@ export class Guardian<T = unknown> {
     let canaryToken: string | null = null;
     if (this.config.canary?.enabled) {
       canaryToken = generateCanaryToken(this.config.canary.prefix);
+      if (options?.session) {
+        options.session.addCanaryToken(canaryToken);
+      }
       safePrompt = injectCanary(safePrompt, canaryToken);
     }
 
     // ── 5. Provider Call ──────────────────────────────────────────────────────
-    const rawProviderResponse = await callFn(safePrompt);
+    let activeCallFn = callFn;
+    let activeModel = this.config.budget?.model ?? 'unknown';
+
+    // Auto-Healing: swap to first fallback if session budget is >80% exhausted
+    if (this.config.budget && this.config.fallbacks && this.config.fallbacks.length > 0) {
+      let isNearLimit = false;
+      const budget = this.config.budget;
+
+      if (options?.session) {
+        const tokensLimit = budget.maxTokens;
+        const costLimit = budget.maxCostUSD;
+        if (tokensLimit !== undefined && options.session.getCumulativeTokens() > 0.8 * tokensLimit) {
+          isNearLimit = true;
+        }
+        if (costLimit !== undefined && options.session.getCumulativeCost() > 0.8 * costLimit) {
+          isNearLimit = true;
+        }
+      }
+
+      if (isNearLimit) {
+        const fallback = this.config.fallbacks[0];
+        if (fallback) {
+          activeCallFn = fallback.callFn;
+          activeModel = fallback.model ?? activeModel;
+        }
+      }
+    }
+
+    let rawProviderResponse: unknown;
+    let fallbackIndex = 0;
+
+    while (true) {
+      try {
+        rawProviderResponse = await activeCallFn(safePrompt);
+        break;
+      } catch (error) {
+        const fallbacksList = this.config.fallbacks ?? [];
+        if (fallbackIndex < fallbacksList.length) {
+          const fallback = fallbacksList[fallbackIndex]!;
+          fallbackIndex++;
+          activeCallFn = fallback.callFn;
+          activeModel = fallback.model ?? activeModel;
+        } else {
+          throw error;
+        }
+      }
+    }
 
     // ── 6. Normalize via adapter ──────────────────────────────────────────────
     const normalized: NormalizedResponse = this.adapter(rawProviderResponse);
@@ -103,6 +213,15 @@ export class Guardian<T = unknown> {
       meta.piiRedacted.push(...matches);
     }
 
+    const redactedOutputText = outputText;
+
+    // ── 7.5. Re-hydrate input tokens if reversible is enabled ──
+    if (inputTokensMap && inputTokensMap.size > 0) {
+      for (const [token, originalValue] of inputTokensMap.entries()) {
+        outputText = outputText.split(token).join(originalValue);
+      }
+    }
+
     // ── 8. OUTPUT: Content Policy ─────────────────────────────────────────────
     if (this.config.content?.enabled) {
       const result = detectContent(outputText, {
@@ -113,9 +232,18 @@ export class Guardian<T = unknown> {
     }
 
     // ── 9. Canary Leak Check ──────────────────────────────────────────────────
-    if (canaryToken && this.config.canary) {
-      const canaryResult = checkCanaryLeak(outputText, canaryToken, this.config.canary);
-      meta.canaryLeaked = canaryResult.leaked;
+    if (this.config.canary) {
+      if (options?.session) {
+        for (const token of options.session.getCanaryTokens()) {
+          const canaryResult = checkCanaryLeak(outputText, token, this.config.canary);
+          if (canaryResult.leaked) {
+            meta.canaryLeaked = true;
+          }
+        }
+      } else if (canaryToken) {
+        const canaryResult = checkCanaryLeak(outputText, canaryToken, this.config.canary);
+        meta.canaryLeaked = canaryResult.leaked;
+      }
     }
 
     // ── 10. Hallucination Detection ───────────────────────────────────────────
@@ -129,15 +257,20 @@ export class Guardian<T = unknown> {
     if (this.config.budget) {
       const usage = buildUsage(
         safePrompt, outputText,
-        this.config.budget.model ?? 'unknown',
+        activeModel,
         normalized.inputTokens,
         normalized.outputTokens
       );
-      checkBudget(usage, this.config.budget);
+      if (options?.session) {
+        options.session.recordUsage(usage);
+        options.session.checkBudget(this.config.budget);
+      } else {
+        checkBudget(usage, this.config.budget);
+      }
       meta.budget = usage;
       // Update rate limiter token count (separate from request count already incremented)
       if (this.rateLimiter) {
-        this.rateLimiter.addTokens(prompt, usage.totalTokens);
+        await this.rateLimiter.addTokens(prompt, usage.totalTokens);
       }
     }
 
@@ -154,13 +287,22 @@ export class Guardian<T = unknown> {
     meta.durationMs = Date.now() - start;
 
     // ── 13. Audit Log ─────────────────────────────────────────────────────────
+    const entry = buildAuditEntry(prompt, outputText, meta, {
+      contentViolation: meta.contentViolation,
+      hallucinationSuspected: meta.hallucinationSuspected,
+      hallucinationScore: meta.hallucinationScore,
+      sessionId: options?.session?.sessionId,
+    });
+    if (options?.session) {
+      options.session.recordAudit(entry);
+    }
     if (this.config.onAudit) {
-      const entry = buildAuditEntry(prompt, outputText, meta, {
-        contentViolation: meta.contentViolation,
-        hallucinationSuspected: meta.hallucinationSuspected,
-        hallucinationScore: meta.hallucinationScore,
-      });
       void Promise.resolve(this.config.onAudit(entry)).catch(() => {});
+    }
+
+    // ── Cache Write ──
+    if (this.config.semanticCache?.enabled && this.semanticCache && cacheKeyVector) {
+      this.semanticCache.add(safePrompt, redactedOutputText, cacheKeyVector);
     }
 
     return { data, raw: outputText, meta };
@@ -172,12 +314,13 @@ export class Guardian<T = unknown> {
    */
   async protectStream(
     callFn: (safePrompt: string) => Promise<unknown>,
-    prompt = ''
+    prompt = '',
+    options?: { session?: GuardianSession }
   ): Promise<GuardianResult<T>> {
     return this.protect(async (safePrompt) => {
       const streamResult = await callFn(safePrompt);
       return await collectStream(streamResult);
-    }, prompt);
+    }, prompt, options);
   }
 
   /**
@@ -195,7 +338,7 @@ export class Guardian<T = unknown> {
 
     // Prompt Injection
     const injectionConfig = this.config.injection ?? { enabled: true, sensitivity: 'medium' };
-    const injectionResult = detectInjection(prompt, { ...injectionConfig, throwOnDetection: false });
+    const injectionResult = await detectInjection(prompt, { ...injectionConfig, throwOnDetection: false });
     if (injectionResult.detected) {
       summary.push(`Prompt injection detected (score: ${injectionResult.score.toFixed(2)})`);
     }
